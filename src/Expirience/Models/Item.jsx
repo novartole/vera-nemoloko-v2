@@ -273,9 +273,9 @@ export default memo(function Item({
   );
 
   function onModelClickHandler(event) {    
-    setItemClicked(currentValue => !currentValue);
-
     event.stopPropagation();
+    
+    setItemClicked(currentValue => !currentValue);
   }
 
   function onItemHightlighted(value) {
