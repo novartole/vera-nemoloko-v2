@@ -85,14 +85,11 @@ export default memo(function Item({
     [ defaultValues ]
   );
 
-  const newPosition = useMemo(
+  const movedItemPosition = useMemo(
     () => {
-      const item = outerRef.current;
-      if (item === undefined)
-        return undefined;
-
-      const itemPostionProjectedOnOY = new THREE.Vector3(0, item.position.y, 0);
-      const directionFromItemPosition = item.position
+      const itemInitPosition = new THREE.Vector3( ...defaultValues.position )
+      const itemPostionProjectedOnOY = new THREE.Vector3(0, itemInitPosition.y, 0);
+      const directionFromItemPosition = itemInitPosition
         .clone()
         .sub(itemPostionProjectedOnOY);
       const moveDirection = directionFromItemPosition.clone();
@@ -105,13 +102,13 @@ export default memo(function Item({
         )
       );
       moveDirection.multiplyScalar(distanceToMove);
-      const newPosition = item.position
+      const newPosition = itemInitPosition
         .clone()
-        .add(moveDirection);
+        .add(moveDirection); 
 
       return newPosition;
     },
-    [distanceToMove, outerRef.current]
+    [defaultValues, distanceToMove]
   );
 
   const [isItemClicked, setItemClicked] = useState(false);
@@ -127,7 +124,7 @@ export default memo(function Item({
               .slice(0, -1)
               .map(value => value + Math.PI), 
               
-            position: [ ...newPosition ] 
+            position: [ ...movedItemPosition ] 
           }
         :
           { 
@@ -138,7 +135,7 @@ export default memo(function Item({
 
             position: defaultValues.position 
           }
-        );
+      );
     }, 
     [ isItemClicked ] 
   ); 
@@ -229,7 +226,7 @@ export default memo(function Item({
     }
   );
 
-  return (
+  return ( 
     <animated.group 
       ref={ outerRef }
       position={ itemSprings.position }
