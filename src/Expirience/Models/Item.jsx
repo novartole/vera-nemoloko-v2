@@ -1,6 +1,6 @@
 import { useThree, useFrame } from '@react-three/fiber';
 import { useScroll, useIntersect, Center } from '@react-three/drei';
-import { useState, useEffect, useRef, useMemo, memo, useLayoutEffect } from 'react';
+import { useState, useEffect, useRef, useMemo, memo, useLayoutEffect, useCallback } from 'react';
 import { useControls } from 'leva';
 import { useSpring, animated, easings, config } from '@react-spring/three';
 import * as THREE from 'three';
@@ -17,8 +17,8 @@ export default memo(function Item({
 
   const scroll = useScroll();
 
-  const outerRef = useRef();
-  const innerRef = useRef();
+  const outerItemGroupRef = useRef();
+  const innerItemGroupRef = useRef();
 
   const { 
     distanceToOY,
@@ -119,7 +119,7 @@ export default memo(function Item({
         isItemClicked
         ?
           { 
-            rotation: innerRef.current.rotation
+            rotation: innerItemGroupRef.current.rotation
               .toArray()
               .slice(0, -1)
               .map(value => value + Math.PI), 
@@ -128,7 +128,7 @@ export default memo(function Item({
           }
         :
           { 
-            rotation: innerRef.current.rotation
+            rotation: innerItemGroupRef.current.rotation
               .toArray()
               .slice(0, -1)
               .map(value => value - Math.PI), 
@@ -196,7 +196,7 @@ export default memo(function Item({
 
   useFrame(
     (state, delta) => {
-      const item = outerRef.current;
+      const item = outerItemGroupRef.current;
 
       item.rotation.x += itemRotationSpeed * delta;
       item.rotation.y += itemRotationSpeed * delta;
@@ -210,12 +210,17 @@ export default memo(function Item({
         model.rotation.z += itemRotationSpeed * delta;
       });
 
-      const isScrollRangeVisible = scroll.visible(range - rangeDelta, 2 * rangeDelta);
-      if (isScrollRangeVisible) {
-        
+      const scrollRange = scroll.curve(range - rangeDelta, 2 * rangeDelta);
+      if (scrollRange > scroll.eps) {
+
         if (isItemHightlighted.current == false)
           onItemHightlighted(true);
 
+        // item.position.set(
+        //   THREE.MathUtils.lerp(defaultValues.position[0], movedItemPosition.x, scrollRange),
+        //   THREE.MathUtils.lerp(defaultValues.position[1], movedItemPosition.y, scrollRange),
+        //   THREE.MathUtils.lerp(defaultValues.position[2], movedItemPosition.z, scrollRange)
+        // );
 
       } else {
 
@@ -228,11 +233,11 @@ export default memo(function Item({
 
   return ( 
     <animated.group 
-      ref={ outerRef }
+      ref={ outerItemGroupRef }
       position={ itemSprings.position }
     >
       <animated.group
-        ref={ innerRef } 
+        ref={ innerItemGroupRef } 
         rotation={ itemSprings.rotation }
         scale={ itemSprings.scale }
       >
@@ -267,8 +272,10 @@ export default memo(function Item({
     </animated.group> 
   );
 
-  function onModelClickHandler(e) {    
+  function onModelClickHandler(event) {    
     setItemClicked(currentValue => !currentValue);
+
+    event.stopPropagation();
   }
 
   function onItemHightlighted(value) {
