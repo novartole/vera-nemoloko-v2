@@ -5,7 +5,13 @@ import { useControls } from 'leva';
 import { useSpring, animated, easings, config } from '@react-spring/three';
 import * as THREE from 'three';
 
-export default memo(function Item({ 
+/**
+ * TODO:
+ * - onClick HTML
+ * - onWaitClick presentation mode
+ */
+
+export default memo(function Item({
   index, 
   calculateItemPosition,
   calculateItemGlobalRange,
@@ -15,17 +21,22 @@ export default memo(function Item({
 }) {
   console.log('item');
 
-  const scroll = useScroll();
-
   const outerItemGroupRef = useRef();
   const innerItemGroupRef = useRef();
 
+  const scroll = useScroll();
+
+  const getThree = useThree(state => state.get);
+
   const { 
-    distanceToOY,
-    itemRangeDelta,
-    itemRotationSpeed,
-    distanceModelModel,
-    distanceToMove
+    distanceToOY: distanceItemOY,
+    rangeDelta: itemRangeDelta,
+    rotationSpeed: itemRotationSpeed,
+    hoveredRotaionSpeed: itemHoveredRotationSpeed,
+    hoveredRotationLambda: itemHoveredRotationLambda,
+    rotationDelta: itemRotationDelta,
+    radiusModelCenter,
+    distanceToMove: distanceToMoveItem
   } = useControls(
     'Item',
     {
@@ -35,31 +46,24 @@ export default memo(function Item({
       */
       distanceToOY: { value: 5, min: 0, max: 25 },
 
-      itemRangeDelta: { value: 0.5, min: 0.1, max: 1 },
-      itemRotationSpeed: { value: 0.05, min: 0, max: 1 },
-      distanceModelModel: { value: 2, min: 1, max: 5 },
+      rangeDelta: { value: 0.5, min: 0.1, max: 1 },
+      rotationSpeed: { value: 0.05, min: 0, max: 1 },
+      hoveredRotaionSpeed: { value: 5, min: 0, max: 10 },
+      hoveredRotationLambda: { value: 3, min: 1, max: 10 },
+      rotationDelta: { value: 1, min: 0, max: 4 },
+      radiusModelCenter: { value: 2, min: 1, max: 5 },
       distanceToMove: { value: 3, min: 1, max: 5 }
     }
-  );
-
-  const range = useMemo(
-    () => calculateItemGlobalRange(index), 
-    [index, calculateItemGlobalRange] 
-  );
-
-  const rangeDelta = useMemo(
-    () => calculateItemRangeDelta(itemRangeDelta), 
-    [itemRangeDelta, calculateItemRangeDelta] 
   );
 
   const defaultValues = useMemo(
     () => ({ 
       scale: 0.1, 
-      rotation: Array(3).fill( 2 * Math.PI * Math.random() ),
+      rotation: Array(3).fill(0),
       opacity: 0.2, 
-      position: [ ...calculateItemPosition(index, distanceToOY) ] 
+      position: [ ...calculateItemPosition(index, distanceItemOY) ] 
     }),
-    [calculateItemPosition, index, distanceToOY]
+    [calculateItemPosition, index, distanceItemOY]
   );
   
   const [itemSprings, itemApi] = useSpring(
@@ -101,14 +105,14 @@ export default memo(function Item({
           0
         )
       );
-      moveDirection.multiplyScalar(distanceToMove);
+      moveDirection.multiplyScalar(distanceToMoveItem);
       const newPosition = itemInitPosition
         .clone()
         .add(moveDirection); 
 
       return newPosition;
     },
-    [defaultValues, distanceToMove]
+    [defaultValues, distanceToMoveItem]
   );
 
   const [isItemClicked, setItemClicked] = useState(false);
@@ -146,7 +150,7 @@ export default memo(function Item({
     () => {
       if (isItemVisible) {
         itemApi.start({ 
-          rotation: defaultValues.rotation.map(value => value + Math.PI / 1.5), 
+          rotation: defaultValues.rotation.map(value => value + (Math.random() - 0.5) * 2 * Math.PI * 0.1 + Math.PI), 
           scale: 1 
         });
       } else {
@@ -181,7 +185,17 @@ export default memo(function Item({
     } 
   ); 
 
-  const modelRefs = [model_1_ref, model_2_ref];
+  const isModel_3_visible = useRef(false);
+
+  const model_3_ref = useIntersect( 
+    visible => {
+      isModel_3_visible.current = visible;
+
+      setItemVisibility();
+    } 
+  ); 
+
+  const modelRefs = [model_1_ref, model_2_ref, model_3_ref];
 
   useLayoutEffect( 
     () => {
@@ -192,15 +206,19 @@ export default memo(function Item({
     [] 
   );
 
-  const isItemHightlighted = useRef(false);
+  const itemRotation = useRef(itemRotationSpeed);
+  
+  const hoveredModel = useRef(null);
+
+  const range = calculateItemGlobalRange(index);
+  const rangeDelta = calculateItemRangeDelta(itemRangeDelta);
+
+  const isItemInRange = useRef(false);
 
   useFrame(
     (state, delta) => {
       const item = outerItemGroupRef.current;
-
-      item.rotation.x += itemRotationSpeed * delta;
-      item.rotation.y += itemRotationSpeed * delta;
-      item.rotation.z += itemRotationSpeed * delta;
+      item.rotation.y += calculateRotation(delta) * delta;
 
       modelRefs.forEach(ref => {
         const model = ref.current;
@@ -210,22 +228,15 @@ export default memo(function Item({
         model.rotation.z += itemRotationSpeed * delta;
       });
 
-      const scrollRange = scroll.curve(range - rangeDelta, 2 * rangeDelta);
-      if (scrollRange > scroll.eps) {
-
-        if (isItemHightlighted.current == false)
-          onItemHightlighted(true);
-
-        // item.position.set(
-        //   THREE.MathUtils.lerp(defaultValues.position[0], movedItemPosition.x, scrollRange),
-        //   THREE.MathUtils.lerp(defaultValues.position[1], movedItemPosition.y, scrollRange),
-        //   THREE.MathUtils.lerp(defaultValues.position[2], movedItemPosition.z, scrollRange)
-        // );
+      const isScrollRangeVisible = scroll.visible(range - rangeDelta, 2 * rangeDelta);
+      if (isScrollRangeVisible) {
+        if (isItemInRange.current === false)
+          onItemInRange(true);
 
       } else {
 
-        if (isItemHightlighted.current == true)
-          onItemHightlighted(false);
+        if (isItemInRange.current === true)
+          onItemInRange(false);
 
       }
     }
@@ -240,49 +251,83 @@ export default memo(function Item({
         ref={ innerItemGroupRef } 
         rotation={ itemSprings.rotation }
         scale={ itemSprings.scale }
-      >
-        <Center>
-          <animated.mesh 
-            position={ [0, 0, 0] }
-            ref={ model_1_ref }
-            onClick={ onModelClickHandler }
-            { ...props }
-          >
-            <animated.meshNormalMaterial
-              opacity={ itemSprings.opacity }
-              transparent
-            />
-            <boxGeometry />
-          </animated.mesh>
+        onPointerEnter={ 
+          event => {
+            if (isItemInRange.current === false)
+              return;
 
-          <animated.mesh 
-            position={ [0, distanceModelModel, 0] }
-            ref={ model_2_ref }
-            onClick={ onModelClickHandler }
-            { ...props }
-          >
-            <animated.meshNormalMaterial
-              opacity={ itemSprings.opacity }
-              transparent
-            />
-            <boxGeometry />
-          </animated.mesh>
-        </Center>
+            event.stopPropagation();
+
+            const model = event.object;
+            if ( isModelFar(model) )
+              hoveredModel.current = model;
+          }
+        } 
+        onPointerLeave={ 
+          event => {
+            if (isItemInRange.current === false)
+              return;
+
+            event.stopPropagation();
+
+            hoveredModel.current = null 
+          } 
+        }
+        onClick={ 
+          event => {
+            if (isItemInRange.current === false)
+              return;
+
+            event.stopPropagation();
+    
+            setItemClicked(currentValue => !currentValue);
+          }
+         }
+      >
+        <animated.mesh 
+          ref={ model_1_ref }
+          position={ [ ...calculateModelPosition(0) ] }
+          { ...props }
+        >
+          <animated.meshNormalMaterial
+            transparent
+            opacity={ itemSprings.opacity }
+          />
+          <boxGeometry />
+        </animated.mesh>
+
+        <animated.mesh 
+          ref={ model_2_ref }
+          position={ [ ...calculateModelPosition(1) ] }
+          { ...props }
+        >
+          <animated.meshNormalMaterial
+            transparent
+            opacity={ itemSprings.opacity }
+          />
+          <boxGeometry />
+        </animated.mesh>
+
+        <animated.mesh 
+          ref={ model_3_ref }
+          position={ [ ...calculateModelPosition(2) ] }
+          { ...props }
+        >
+          <animated.meshNormalMaterial
+            transparent
+            opacity={ itemSprings.opacity }
+          />
+          <boxGeometry />
+        </animated.mesh>
       </animated.group> 
     </animated.group> 
   );
 
-  function onModelClickHandler(event) {    
-    event.stopPropagation();
-    
-    setItemClicked(currentValue => !currentValue);
-  }
-
-  function onItemHightlighted(value) {
-    isItemHightlighted.current = value;
+  function onItemInRange(value) {
+    isItemInRange.current = value;
 
     itemApi.start(
-      isItemHightlighted.current
+      isItemInRange.current
       ?
         { opacity: 1 }
       :
@@ -291,6 +336,69 @@ export default memo(function Item({
   }
 
   function setItemVisibility() {
-    setIsItemVisible(isModel_1_visible.current || isModel_2_visible.current)
+    setIsItemVisible(
+      isModel_1_visible.current 
+      || isModel_2_visible.current
+      || isModel_3_visible.current  
+    );
   }
+
+  function isModelFar(model) {
+
+    // world position of hovered model
+    const modelWorldPosition = new THREE.Vector3();
+    model.getWorldPosition(modelWorldPosition);
+    
+    // world position of center of models
+    const centerWorldPosition = new THREE.Vector3();
+    innerItemGroupRef.current.getWorldPosition(centerWorldPosition);
+
+    // (world) position of camera
+    const cameraPosition = getThree().camera.position;
+
+    // direction from camera to center of models
+    const fromCameraToCenter = centerWorldPosition.clone().sub(cameraPosition);
+    
+    // direction from camera to hovered model and its length
+    const fromCameraToModel = modelWorldPosition.clone().sub(cameraPosition);
+    const distanceFromCameraToModel = fromCameraToModel.length();
+    
+    // projected center on the direction and its length
+    const centerProjection = fromCameraToCenter.clone().projectOnVector(fromCameraToModel);
+    const distanceFromCameraToCenterProjection = centerProjection.length();
+
+    return distanceFromCameraToCenterProjection - distanceFromCameraToModel < itemRotationDelta;
+  }
+
+  function calculateRotation(deltaTime) {
+    if (innerItemGroupRef.current === undefined)
+      return 0;
+
+    const model = hoveredModel.current;
+    if (model === null)
+      return itemRotation.current = 
+        THREE.MathUtils.damp(itemRotation.current, itemRotationSpeed, itemHoveredRotationLambda, deltaTime);
+
+    return itemRotation.current =
+      isModelFar(model)
+      ? 
+        THREE.MathUtils.damp(itemRotation.current, itemRotationSpeed + itemHoveredRotationSpeed, 1 / itemHoveredRotationLambda, deltaTime)
+      : 
+        THREE.MathUtils.damp(itemRotation.current, itemRotationSpeed, itemHoveredRotationLambda, deltaTime);
+  }
+
+  function calculateModelPosition(index) {
+    const angle = 2 * Math.PI * index / innerItemGroupRef.current?.children.length ?? 1;
+
+    // x
+    const x = radiusModelCenter * Math.sin(angle);
+
+    //y 
+    const y = 0;
+
+    // z
+    const z = radiusModelCenter * Math.cos(angle);
+
+    return new THREE.Vector3(x, y, z);
+  };
 })

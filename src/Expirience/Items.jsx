@@ -21,49 +21,43 @@ export default function Items() {
   const { 
     cameraRadius,
     cameraRadiusOffset,
-    cameraRadiusOffsetFactor,
-
-    bla
+    cameraRadiusOffsetFactor
   } = useControls(
     'Items',
     {
       cameraRadius: { value: 15, min: 5 , max: 30 },
       cameraRadiusOffset: { value: 0, min: 0, max: 30 },
-      cameraRadiusOffsetFactor: { value: 0, min: 0, max: 1 },
-
-      bla: false
+      cameraRadiusOffsetFactor: { value: 0, min: 0, max: 1 }
     }
   );
 
-  useEffect( () => { globalState.itemsCount = 1 }, [] );
+  useEffect( () => { globalState.itemsCount = 2 }, [] );
 
   // const [itemsCount, setItemsCount] = useState(state.itemsCount);
   // useEffect( () => onItemsCountReady(itemsCount), [ itemsCount ] );
 
-  
-
-  // TODO: scroll condition to avoid extra calculation?
   useFrame(
     (state, delta) => {
-      const scrollRange = scroll.range(reservedRange, 1 - reservedRange);
-      const radiusOffset = cameraRadiusOffset * cameraRadiusOffsetFactor * scrollRange;
-      const radius = cameraRadius + radiusOffset;
+      if ( scroll.visible(reservedRange, 1 - reservedRange) ) {
+        const scrollRange = scroll.range( reservedRange, 1 - reservedRange );
+        const radiusOffset = cameraRadiusOffset * cameraRadiusOffsetFactor * scrollRange;
+        const radius = cameraRadius + radiusOffset;
 
-      // camera x
-      const angle = 2 * Math.PI * scrollRange;
-      const x = radius * Math.sin(angle);
+        // camera x
+        const angle = 2 * Math.PI * scrollRange;
+        const x = radius * Math.sin(angle);
 
-      // camera y
-      const totalHeight = state.viewport.height * globalState.itemsCount;
-      const y = - scrollRange * totalHeight + state.camera.position.y;
+        // camera y
+        const totalHeight = state.viewport.height * globalState.itemsCount;
+        const heightOffset = state.viewport.height;
+        const y = - scrollRange * totalHeight - heightOffset;
 
-      // camera z
-      const z = radius * Math.cos(angle);
+        // camera z
+        const z = radius * Math.cos(angle);
 
-      const newCameraPosition = new THREE.Vector3(x, y, z);
-      
-      state.camera.position.set( ...newCameraPosition );
-      state.camera.lookAt( new THREE.Vector3(0, state.camera.position.y, 0) );
+        state.camera.position.set(x, y, z);
+        state.camera.lookAt(0, state.camera.position.y, 0);
+      }
     }
   );
 

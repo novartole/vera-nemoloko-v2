@@ -17,5 +17,5 @@ export const state = proxy({
     { order: 10, symbol: 'K', path: './letters/K.png' },
     { order: 11, symbol: 'O3', path: './letters/O3.png'},
   ],
-  itemsCount: 1
+  itemsCount: 2
 });
