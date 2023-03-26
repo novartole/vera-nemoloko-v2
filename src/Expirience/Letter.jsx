@@ -14,8 +14,7 @@ export default memo(function Letter({
   return (
     <mesh 
       scale={ scale }
-      position-x={ position.x }
-      position-y={ position.y }
+      position={ [ ...position ] }
     >
       <planeGeometry />
       <meshStandardMaterial 

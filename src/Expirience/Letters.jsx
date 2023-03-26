@@ -2,6 +2,7 @@ import { useTexture, Center, Float, useScroll } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import { memo, Suspense, useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useControls, button } from 'leva';
+import * as THREE from 'three';
 
 import Letter from './Letter.jsx';
 import { state } from './util.js';
@@ -57,7 +58,10 @@ export default function Letters() {
           // y
           const y = source.randomness * letterMaxVerticalOffset;
 
-          return [ source, { x, y } ];
+          // z
+          const z = (Math.random() - 0.5) * 2;
+
+          return [ source, new THREE.Vector3(x, y, z) ];
         }
       ) 
     ),
@@ -81,13 +85,12 @@ export default function Letters() {
 
   useFrame(
     (state, delta) => { 
-      const scrollRange = scroll.range( 0, 1 / (scroll.pages + 1) );
-      const totalHeight = state.viewport.height;
-      
-      // TODO: to one call of set
-      state.camera.position.x = 0;
-      state.camera.position.y = - scrollRange * totalHeight;
-      state.camera.position.z = 15;
+      if ( scroll.visible( 0, 1 / (scroll.pages + 1) ) ) {
+        const scrollRange = scroll.range( 0, 1 / (scroll.pages + 1) );
+        const totalHeight = state.viewport.height;
+        
+        state.camera.position.set(0, - scrollRange * totalHeight, 15);
+      }
     }
   );
 
