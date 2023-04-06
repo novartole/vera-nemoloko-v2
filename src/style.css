@@ -1,3 +1,13 @@
+* 
+{
+  /* 
+    This trick prevent weird behavior on mobiles whilst touching around.
+    It's better to use it precisely in a target element,
+    but now it annoyingly pop-ups on every click in Console.
+  */
+  touch-action: none;
+}
+
 html,
 body,
 #root 
