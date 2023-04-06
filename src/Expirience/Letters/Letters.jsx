@@ -5,7 +5,7 @@ import { useControls, button } from 'leva';
 import * as THREE from 'three';
 
 import Letter from './Letter.jsx';
-import { state } from './util.js';
+import { state } from '../utils/state.js';
 
 export default function Letters() { 
   console.log('letters');
@@ -20,10 +20,10 @@ export default function Letters() {
   } = useControls(
     'Letters', 
     {
-      horizontalOffsetFactor: { value: 0.2, min: 0, max: 1, step: 0.01 },
-      maxVerticalOffset: { value: 0.5, min: 0, max: 1, step: 0.01 },
-      scale: { value: 1, min: 1, max: 5, step: 0.01 },
-      positionY: { value: 0, min: - 10, max: 5, step: 0.01 }
+      horizontalOffsetFactor: { value: 0.2, min: 0, max: 1, step: 0.01, label: 'fac: hrz offs' },
+      maxVerticalOffset: { value: 0.5, min: 0, max: 1, step: 0.01, label: 'max: vrt offs' },
+      scale: { value: 1, min: 1, max: 5, step: 0.01},
+      positionY: { value: 0, min: - 10, max: 5, step: 0.01, label: 'pos: Y' }
     }
   );
 

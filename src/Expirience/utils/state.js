@@ -1,8 +1,6 @@
 import * as THREE from 'three';
 import { proxy } from 'valtio';
 
-// export const damp = THREE.MathUtils.damp
-
 export const state = proxy({
   letterSources: [
     { order: 0, symbol: 'V', path: './letters/V.png' },
@@ -17,5 +15,6 @@ export const state = proxy({
     { order: 10, symbol: 'K', path: './letters/K.png' },
     { order: 11, symbol: 'O3', path: './letters/O3.png'},
   ],
-  itemsCount: 2
+  
+  collectionsCount: 2
 });
