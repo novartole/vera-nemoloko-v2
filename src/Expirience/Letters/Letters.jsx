@@ -1,28 +1,27 @@
-import { useTexture, Center, Float, useScroll } from '@react-three/drei';
-import { useFrame, useThree } from '@react-three/fiber';
-import { memo, Suspense, useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { useControls, button } from 'leva';
+import { useTexture, Center } from '@react-three/drei';
+import { useRef, useMemo, useCallback, useEffect } from 'react';
+import { useControls } from 'leva';
 import * as THREE from 'three';
+import { useThree } from '@react-three/fiber';
+import { useSprings, animated } from '@react-spring/three';
 
 import Letter from './Letter.jsx';
 import { state } from '../utils/state.js';
 
+const AnimatedLetter = animated(Letter);
+
 export default function Letters() { 
   console.log('letters');
-
-  const scroll = useScroll();
 
   const { 
     horizontalOffsetFactor: letterHorizontalOffsetFactor,
     maxVerticalOffset: letterMaxVerticalOffset,
-    scale: letterScale,
     positionY: lettersPositionY
   } = useControls(
     'Letters', 
     {
       horizontalOffsetFactor: { value: 0.2, min: 0, max: 1, step: 0.01, label: 'fac: hrz offs' },
       maxVerticalOffset: { value: 0.5, min: 0, max: 1, step: 0.01, label: 'max: vrt offs' },
-      scale: { value: 1, min: 1, max: 5, step: 0.01},
       positionY: { value: 0, min: - 10, max: 5, step: 0.01, label: 'pos: Y' }
     }
   );
@@ -52,7 +51,7 @@ export default function Letters() {
         source => {
           // x
           const order = source.order;
-          const offset = letterHorizontalOffsetFactor * order * letterScale;
+          const offset = letterHorizontalOffsetFactor * order;
           const x = order + offset;
 
           // y
@@ -61,58 +60,73 @@ export default function Letters() {
           // z
           const z = (Math.random() - 0.5) * 2;
 
-          return [ source, new THREE.Vector3(x, y, z) ];
+          return [ source, [x, y, z] ];
         }
       ) 
     ),
-    [sources, letterHorizontalOffsetFactor, letterScale, letterMaxVerticalOffset]
+    [sources, letterHorizontalOffsetFactor, letterMaxVerticalOffset]
   );
 
-  {/* Once map loadings are done, force the re-render to center letters. */}
-  const setState = useState()[1];
-  const forceRender = () => setState({});
-  const onLetterLoadedHandler = useCallback(
-    ( () => {
-      let readyCount = 0;
+  // const { width, height } = useThree(state => state.size);
 
-      return () => { 
-        if ( ++readyCount == sources.length )
-          forceRender();
-      }
-    } )(), 
-    [ sources ]
-  );
+  // const [springs, api] = useSprings(
+  //   sources.length,
+  //   index => ({
+  //     positionXY: [0, 0],
+  //     config: { mass: 4, friction: 220 },
+  //   }),
+  //   []
+  // );
 
-  useFrame(
-    (state, delta) => { 
-      if ( scroll.visible( 0, 1 / (scroll.pages + 1) ) ) {
-        const scrollRange = scroll.range( 0, 1 / (scroll.pages + 1) );
-        const totalHeight = state.viewport.height;
-        
-        state.camera.position.set(0, - scrollRange * totalHeight, 15);
-      }
-    }
-  );
+  // const pointerMoveHandler = useCallback(
+  //   event => {
+  //     const x = (event.offsetX / width) * 2 - 1
+  //     const y = (event.offsetY / height) * -2 + 1
+
+  //     api.start({ positionXY: [x * 5, y * 2] });
+  //   },
+  //   [api, width, height]
+  // );
+
+  // useEffect(
+  //   () => {
+  //     window.addEventListener('pointermove', pointerMoveHandler);
+
+  //     return () => {
+  //       window.removeEventListener('pointermove', pointerMoveHandler);
+  //     };
+  //   },
+  //   [ pointerMoveHandler ]
+  // );
+
+  const lettersRef = useRef( Array(sources.length) );
+
+  //     lettersRef.current.forEach(
+  //       (letter, index) => {
+  //         letter.position.setX(springs[index].positionXY[0] + letter.position.x);
+  //         letter.position.setY(springs[index].positionXY[1] + letter.position.y);
+  //       }
+  //     )
+  
 
   return (
     <group position-y={ lettersPositionY }>
-      <Center> 
+      <Center>
         {
-          sources.map( source =>   
-            <Suspense key={ source.order }>
-              <Letter
-                position={ positions.get(source) }
-                scale={ letterScale }
-                path={ source.path }
-                // TODO: handle loading errors
-                onLoaded={ onLetterLoadedHandler }
-              />
-             </Suspense>
+          sources.map(source => 
+            <AnimatedLetter 
+              ref={ letter => lettersRef.current[source.order] = letter }
+              key={ source.order }
+              position={ positions.get(source) }
+              path={ source.path }
+              symbol={ source.symbol }
+              order={ source.order }
+            />
           )
         }
       </Center>
     </group>
   );
-}
+};
 
 state.letterSources.forEach( source => useTexture.preload(source.path) );

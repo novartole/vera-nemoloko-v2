@@ -1,100 +1,107 @@
-import { useThree, useFrame, useLoader } from '@react-three/fiber';
-import { MeshRefractionMaterial, useScroll, PresentationControls, useGLTF, meshBounds } from '@react-three/drei';
-import { useState, useEffect, useRef, useMemo, memo, useLayoutEffect } from 'react';
-import { useControls, folder } from 'leva';
+import { useThree, useFrame } from '@react-three/fiber';
+import { useScroll, PresentationControls } from '@react-three/drei';
+import { useState, useEffect, useRef, memo, useLayoutEffect, Suspense } from 'react';
+import { useControls } from 'leva';
 import { useSpring, animated, easings, config } from '@react-spring/three';
 import * as THREE from 'three';
 
-import Description from './Description.jsx';
+import CollectionInfo from './CollectionInfo.jsx';
 import { Modes, useMode } from '../utils/mode.js';
-import TestRing from '../Models/TestRing.jsx';
+import ModelInfo from './ModelInfo.jsx';
 
 /**
  * TODO: 
- * - fix freez happens in pres mode
- * - commit
- * - format
- * - description.onClick - show details
+ * - fix freez happens in pres mode (only current Chrome?)
  */
 
-export default memo(function Collection({
+export default function Collection({ 
   index, 
-  calculateCollectionPosition,
-  calculateCollectionGlobalRange,
-  calculateCollectionRanges,
-  title,
-  description,
-  elements,
-  onCollectionVisibilityChangedHandler
+  content: { elements, title, description }, 
+  point 
 }) {
   console.log('collection');
 
-  const range = calculateCollectionGlobalRange(index);
-
   const scroll = useScroll();
 
-  const getThree = useThree(state => state.get);
+  const camera = useThree(state => state.camera);
+  const { height } = useThree(state => state.viewport);
 
   const modelContainerOfMoving = useRef();
   const modelContainerOfRotating = useRef();
 
+  // set model which is far and start moving it closer to camera
   const nearestModelCondidate = useRef(null);
 
-  const isCollectionInRange = useRef(false);
+  // if false when collection is not active
+  const isCollectionActive = useRef(false);
+
+  // timer to process click-and-wait action to activate PRES mode
   const timerId = useRef();
 
-  const modelRefs = useRef([ ...Array(elements.length) ]);
+  // models in collection
+  const modelsRef = useRef( Array(elements.length) );
 
+  // ref of collection
+  const ref = useRef();
+
+  // used both in SCROLL and PRES modes to show info about collection/selected model, 
+  // and locate all moved parts
   const [isCollectionSelected, setIsCollectionSelected] = useState(false);
+
+  // trigger to show animation when collection is in view, but is not active yet
   const [isCollectionVisible, setIsCollectionVisible] = useState(false);
 
-  const [hoveredModel, setHoveredModel] = useState(null);
+  // model which is used to fetch info for PRES mode
+  const [selectedModel, setSelectedModel] = useState(null);
   
   const { 
     distanceToOY: distanceCollectionOY,
-    rangeDelta: collectionRangeDelta,
     rotationSpeed: collectionRotationSpeed,
     hoveredRotaionSpeed: collectionHoveredRotationSpeed,
     hoveredRotationLambda: collectionHoveredRotationLambda,
     rotationDelta: collectionRotationDelta,
     radiusModelCenter,
-    distanceToMoveModelsContainer,
-    rangeMainFactor,
+    vectorToMoveModelsContainerOnScrollSelected,
+    vectorToMoveModelsContainerOnPresSelected,
+    visibleDelta,
+    activeDelta,
+    collectionInfoPosition,
+    modelInfoPosition,
+    polar,
+    azimuth,
     title: collectionTitle,
     description: collectionDescription
   } = useControls(
     `Collection #${index}`,
     {
       distanceToOY: { value: 5, min: 0, max: 25, label: 'dist: col -> OY' },
-      rangeDelta: { value: 0.1, min: 0.1, max: 1, label: 'del: . -> visible' },
       rotationSpeed: { value: 0.05, min: 0, max: 1, label: 'rot: init' },
       hoveredRotaionSpeed: { value: 5, min: 0, max: 10, label: 'rot: hovered' },
       hoveredRotationLambda: { value: 3, min: 1, max: 10, label: 'lam: rot', hint: 'how fast target value is gonna be reached' },
       rotationDelta: { value: 1, min: 0, max: 4, label: 'del: . -> rot', hint: 'distance from center to model toward camera' },
-      distanceToMoveModelsContainer: { value: 3, min: 1, max: 10, label: 'dist: mod -> selected' },
+      vectorToMoveModelsContainerOnScrollSelected: { value: [3, 0, 0], label: 'pos: mod -> selected(SCROLL)' },
+      vectorToMoveModelsContainerOnPresSelected: { value: [-4, 0, 2], label: 'pos: mod -> selected(PRES)' },
       radiusModelCenter: { value: 2, min: 1, max: 5, label: 'dist: center -> mod' },
-      rangeMainFactor: { value: 0.9, min: 0.5, max: 1.5, label: 'fac: range'},
+      visibleDelta: { value: height * 1.5, min: 0.5, max: height * 1.5, label: 'del: visible'},
+      activeDelta: { value: height / 4, min: 0.5, max: height / 2, label: 'del: active'},
+      collectionInfoPosition: { value: [- 5.75, 1, 0], label: 'pos: col info' },
+      modelInfoPosition: { value: [4.5, 0, 0], label: 'pos: mod info' },
+      polar: { value: 30, min: 0, max: 360, step: 1, label: 'angle, vert: mod' },
+      azimuth: { value: 30, min: 0, max: 360, step: 1, label: 'angle, horiz: mod' },
       title,
       description
     },
-    [title, description]
+    [title, description, height]
   );
 
-  const collectionPosition = useMemo(
-    () => [ ...calculateCollectionPosition(index, distanceCollectionOY) ],
-    [calculateCollectionPosition, index, distanceCollectionOY]
-  );
-
-  const ranges = calculateCollectionRanges(collectionRangeDelta);
-  const rangeDelta = ranges.delta;
-  const rangeMain = ranges.main * rangeMainFactor;
-
+  const collectionPosition = [distanceCollectionOY * point.x, point.y, distanceCollectionOY * point.z];
+  
   const collectionRotation = useRef(collectionRotationSpeed);
 
   const defaultValues = { 
     scale: 0.1, 
     rotation: [0, 0, 0],
-    opacity: 0.2, 
+    opacity: 0.5, 
     position: [0, 0, 0]
   };
   
@@ -106,23 +113,24 @@ export default memo(function Collection({
       opacity: defaultValues.opacity,
 
       config: key => {
-        switch (key) {
-          case 'scale':
-            return { mass: 2, ...config.wobbly }
-
-          case 'rotation':
-            return { duration: 1000, easing: easings.easeOutCubic }
-
-          default: 
-            return {}
-        }
+        if (key === 'scale') return { mass: 2, ...config.wobbly }
+        else if (key === 'rotation') return { duration: 1000, easing: easings.easeOutCubic }
+        else return {};
       }
     }),
     []
   );
 
   useLayoutEffect( 
-    () => modelRefs.current.forEach( model => model.rotation.set( ...Array(3).fill(Math.random() * 2 * Math.PI) ) ),
+    () => {
+      ref.current.lookAt(
+        (1 + distanceCollectionOY) * point.x, 
+        point.y, 
+        (1 + distanceCollectionOY) * point.z
+      );
+
+      modelsRef.current.forEach( model => model.rotation.set( ...Array(3).fill(Math.random() * 2 * Math.PI) ) );
+    },
     [] 
   );
 
@@ -133,18 +141,15 @@ export default memo(function Collection({
         console.log('** NEED to handle PRESENTATION mode');
 
         scroll.el.style.overflow = "hidden";
-        
-        if (isCollectionSelected) {
 
-          setIsCollectionSelected(false);
-
-        }
-
+        setIsCollectionSelected(true);
 
       } else if (currentMode === Modes.SCROLL) {
         console.log('** NEED to handle SCROLL mode');
 
         scroll.el.style.overflow = "auto";
+
+        setSelectedModel(null);
       }
     },
     [ isCollectionSelected ]
@@ -152,29 +157,39 @@ export default memo(function Collection({
 
   useEffect( 
     () => {
-      springApi.start(
-        isCollectionSelected
-        ?
-          { 
-            rotation: [
-              modelContainerOfRotating.current.rotation.x + Math.PI,
-              modelContainerOfRotating.current.rotation.y - Math.PI,
-              modelContainerOfRotating.current.rotation.z
-            ],              
-            modelsContainerPosition: [ distanceToMoveModelsContainer, 0, 0 ]
-          }
-        :
-          { 
-            rotation: [
-              modelContainerOfRotating.current.rotation.x - Math.PI,
-              modelContainerOfRotating.current.rotation.y + Math.PI,
-              modelContainerOfRotating.current.rotation.z
-            ],
-            modelsContainerPosition: defaultValues.position
-          }
-      );
+      if (mode.current === Modes.SCROLL) {
+        springApi.start(
+          isCollectionSelected
+          ?
+            { 
+              rotation: [
+                modelContainerOfRotating.current.rotation.x + Math.PI,
+                modelContainerOfRotating.current.rotation.y - Math.PI,
+                modelContainerOfRotating.current.rotation.z
+              ],              
+              modelsContainerPosition: vectorToMoveModelsContainerOnScrollSelected
+            }
+          :
+            { 
+              rotation: [
+                modelContainerOfRotating.current.rotation.x - Math.PI,
+                modelContainerOfRotating.current.rotation.y + Math.PI,
+                modelContainerOfRotating.current.rotation.z
+              ],
+              modelsContainerPosition: defaultValues.position
+            }
+        );
+      } else if (mode.current === Modes.PRESENTATION) {
+        springApi.start(
+          isCollectionSelected
+          ?
+            { modelsContainerPosition: vectorToMoveModelsContainerOnPresSelected }
+          :
+            { modelsContainerPosition: defaultValues.position }
+        );
+      }
     }, 
-    [ isCollectionSelected ] 
+    [ isCollectionSelected ]
   ); 
 
   useEffect( 
@@ -190,8 +205,6 @@ export default memo(function Collection({
           scale: defaultValues.scale 
         });
       }
-
-      onCollectionVisibilityChangedHandler(index, isCollectionVisible);
     }, 
     [index, isCollectionVisible] 
   );
@@ -200,26 +213,26 @@ export default memo(function Collection({
     (state, delta) => {
       modelContainerOfMoving.current.rotation.y += calculateModelContainerRotation(delta) * delta;
 
-      modelRefs.current.forEach(model => {
+      modelsRef.current.forEach(model => {
         model.rotation.x += collectionRotationSpeed * delta;
         model.rotation.y += collectionRotationSpeed * delta;
         model.rotation.z += collectionRotationSpeed * delta;
       });
 
-      const isCollectionInSelectableRange = scroll.visible(range - rangeDelta, 2 * rangeDelta);
-      if (isCollectionInSelectableRange) {
+      const isCollectionInActiveRange = Math.abs(state.camera.position.y - collectionPosition[1]) < activeDelta;
+      if (isCollectionInActiveRange) {
 
-        if (isCollectionInRange.current === false)
-          onCollectionInRange(true);
+        if (isCollectionActive.current === false)
+          onCollectionInActiveRange(true);
 
       } else {
 
-        if (isCollectionInRange.current === true)
-          onCollectionInRange(false);
+        if (isCollectionActive.current === true)
+          onCollectionInActiveRange(false);
 
       }
 
-      const isCollectionInVisibleRange = scroll.visible(range - rangeMain, 2 * rangeMain);
+      const isCollectionInVisibleRange = Math.abs(state.camera.position.y - collectionPosition[1]) < visibleDelta;
       if (isCollectionInVisibleRange) {
 
         if (isCollectionVisible === false) 
@@ -234,36 +247,65 @@ export default memo(function Collection({
     }
   );
 
+  const [modelInfoContent, setModelInfoContent] = useState(null);
+
+  useEffect(
+    () => {
+      const index = modelsRef.current.findIndex(model => model === selectedModel);
+    
+      setModelInfoContent(index > - 1 ? elements[index].info : null);
+    },
+    [selectedModel, elements]
+  );
+
   return (   
-    <group position={collectionPosition}>
-      <Description position={[- 5.75, 1, 0]} visible={isCollectionSelected} title={collectionTitle} text={collectionDescription}/>
-      <animated.group ref={modelContainerOfMoving} position={spring.modelsContainerPosition}>
+    <group ref={ ref } position={ collectionPosition }>
+      <CollectionInfo 
+        position={ collectionInfoPosition } 
+        title={ collectionTitle } 
+        description={ collectionDescription }
+        visible={ mode.current === Modes.SCROLL && isCollectionSelected } 
+      />
+      <ModelInfo 
+        content={ modelInfoContent }
+        position={ modelInfoPosition }
+        visible={ mode.current === Modes.PRESENTATION && modelInfoContent !== null }
+      />
+      <animated.group ref={ modelContainerOfMoving } position={ spring.modelsContainerPosition }>
         <animated.group
-          ref={modelContainerOfRotating}
-          rotation={spring.rotation}
-          scale={spring.scale}
-          onPointerEnter={onModelContainerOfRotatingPointerEnter}
-          onPointerLeave={onModelContainerOfRotatingPointerLeave}
-          onClick={onModelContainerOfRotatingClick}
-          onPointerDown={onModelContainerOfRotatingPointerDown}
-          onPointerUp={onModelContainerOfRotatingPointerUp}
-          onPointerMissed={onCollectionPointerMissed}
+          ref={ modelContainerOfRotating}
+          rotation={ spring.rotation}
+          scale={ spring.scale}
+          onPointerEnter={ onModelContainerOfRotatingPointerEnter }
+          onPointerLeave={ onModelContainerOfRotatingPointerLeave }
+          onClick={ onModelContainerOfRotatingClick }
+          onPointerDown={ onModelContainerOfRotatingPointerDown }
+          onPointerUp={ onModelContainerOfRotatingPointerUp }
+          onPointerMissed={ onCollectionPointerMissed }
+          onDoubleClick={ onModelContainerOfRotatingDoubleClick }
         >
           {
             elements.map(
               (element, index) => (
-                <group key={index} position={[...calculateModelPosition(index)]}>
-                  <PresentationControls
+                <group 
+                  key={ index } 
+                  position={ [...calculateModelPosition(index)] } 
+                  scale={ 1 - 0.5 * (1 + index) / elements.length }
+                >
+                  <PresentationControls 
+                    global={ false }
                     enabled={
                       mode.current === Modes.PRESENTATION 
-                      && modelRefs.current[index] === hoveredModel
+                      && modelsRef.current[index] === selectedModel
                     }
-                    polar={[- Math.PI / 4, Math.PI / 4]}
-                    azimuth={[- Math.PI / 2, Math.PI / 2]}
+                    polar={ [- THREE.MathUtils.degToRad(polar), THREE.MathUtils.degToRad(polar)] }
+                    azimuth={ [- THREE.MathUtils.degToRad(azimuth), THREE.MathUtils.degToRad(azimuth)] }
                     config={{ mass: 2, tension: 400 }}
                     snap={{ mass: 4, tension: 400 }}
                   >
-                    <element.model ref={modelRef => modelRefs.current[index] = modelRef} opacity={spring.opacity} />
+                    <Suspense>
+                      <element.model ref={ modelRef => modelsRef.current[index] = modelRef } opacity={ spring.opacity } />
+                    </Suspense>
                   </PresentationControls>
                 </group>  
               )
@@ -274,10 +316,10 @@ export default memo(function Collection({
     </group>
   );
 
-  function onCollectionInRange(value) {
-    isCollectionInRange.current = value;
+  function onCollectionInActiveRange(value) {
+    isCollectionActive.current = value;
 
-    if (isCollectionInRange.current) {
+    if (isCollectionActive.current) {
 
       springApi.start({ opacity: 1 });
 
@@ -288,6 +330,10 @@ export default memo(function Collection({
   }
 
   function isModelFar(model) {
+
+    if (modelsRef.current.length === 1)
+      return false;
+
     // world position of hovered model
     const modelWorldPosition = new THREE.Vector3();
     model.getWorldPosition(modelWorldPosition);
@@ -297,7 +343,7 @@ export default memo(function Collection({
     modelContainerOfRotating.current.getWorldPosition(centerWorldPosition);
 
     // (world) position of camera
-    const cameraPosition = getThree().camera.position;
+    const cameraPosition = camera.position;
 
     // direction from camera to center of models
     const fromCameraToCenter = centerWorldPosition.clone().sub(cameraPosition);
@@ -332,7 +378,12 @@ export default memo(function Collection({
   }
 
   function calculateModelPosition(index) {
-    const angle = 2 * Math.PI * index / modelContainerOfRotating.current?.children.length ?? 1;
+    const length = modelContainerOfRotating.current?.children.length ?? 1;
+    
+    if (length === 1) 
+      return new THREE.Vector3();
+
+    const angle = 2 * Math.PI * index / length;
 
     // x
     const x = radiusModelCenter * Math.sin(angle);
@@ -347,85 +398,132 @@ export default memo(function Collection({
   };
 
   function onModelContainerOfRotatingPointerEnter(event) {
-    if (isCollectionInRange.current === false)
+    if (isCollectionActive.current === false)
       return;
+
+    // console.log('*** enter', mode.current);
 
     event.stopPropagation();
 
+    // set nearest model condidate
     const model = event.object;
     if (isModelFar(model))
       nearestModelCondidate.current = model;
 
-    setHoveredModel(model);
+    if (mode.current === Modes.PRESENTATION)
+      setSelectedModel(event.object);
   }
   
   function onModelContainerOfRotatingPointerLeave(event) {
-    if (isCollectionInRange.current === false)
+    if (isCollectionActive.current === false)
       return;
+
+    // console.log('*** leave', mode.current);
 
     event.stopPropagation();
 
+    // reset nearest model condidate
     nearestModelCondidate.current = null;
 
-    setHoveredModel(null);
-    clearTimeout(timerId.current);
-    timerId.current = null;
-    modeActions.resetNext();
+    // stop processing of click-and-wait (SCROLL -> PRES)
+    if (mode.current === Modes.SCROLL) {
+      clearTimeout(timerId.current); 
+      timerId.current = null;
+      modeActions.resetNext();
+    }
   }
 
   function onModelContainerOfRotatingClick(event) {
-    if (isCollectionInRange.current === false)
+    if (isCollectionActive.current === false)
       return;
 
-    event.stopPropagation();
+    // console.log('___clicked', mode.current);
 
-    if (mode.next !== null) {
-
-      modeActions.applyNextToCurrent();
-
-    } else if (mode.current === Modes.SCROLL) {
-
-      setIsCollectionSelected(currentValue => !currentValue);
-
-    }
+    // event.stopPropagation();
   }
   
   function onModelContainerOfRotatingPointerDown(event) {
-    if (isCollectionInRange.current === false)
+    if (isCollectionActive.current === false)
       return;
+
+    // console.log('___down', mode.current);
 
     event.stopPropagation();
 
-    timerId.current = setTimeout(
-      () => {
-        if (hoveredModel !== null) {
-          console.log('__mode change toggled');
+    if (mode.current === Modes.SCROLL) {
+      timerId.current = setTimeout(
+        // !!! shouldn't be called if cursor beyond any model
+        () => {
+          console.log('__mode change queued: SCROLL -> PRES');
 
-          modeActions.toggleNextByCurrent(Modes.SCROLL, Modes.PRESENTATION);
-        }
-
-        timerId.current = null;
-      },
-      2000
-    );
+          // queue next and apply when pointer goes up
+          modeActions.setNext(Modes.PRESENTATION);
+  
+          // clear the timer
+          timerId.current = null;
+        },
+        2000
+      );
+    }
   }
 
   function onModelContainerOfRotatingPointerUp(event) {
-    if (isCollectionInRange.current === false)
+    if (isCollectionActive.current === false)
       return;
 
     event.stopPropagation();
 
-    clearTimeout(timerId.current);
-    timerId.current = null;
+    // console.log('___up', mode.current);
+
+    if (mode.current === Modes.SCROLL) {
+      // stop processing of click-and-wait (SCROLL -> PRES)
+      // note: next will be reseted during handling of current mode
+      clearTimeout(timerId.current);
+      timerId.current = null;
+
+      // simple click
+      if (mode.next === null) {
+
+        setIsCollectionSelected(currentValue => !currentValue);
+
+      // mode change has been called - handle it
+      } else if (mode.next === Modes.PRESENTATION) {
+        // if colllection is selected in current mode, then unselect it
+        if (isCollectionSelected) {
+  
+          setIsCollectionSelected(false);
+  
+        }
+  
+        // set selected model for PRES mode
+        setSelectedModel(event.object);
+
+        // change current mode 
+        modeActions.applyNextToCurrent();
+      }  
+    }
   }
 
   function onCollectionPointerMissed(event) {
-    if (isCollectionInRange.current === false)
+    if (isCollectionActive.current === false)
       return;
 
     event.stopPropagation();
     
     // console.log('clicked outside of collection');
   }
-});
+
+  function onModelContainerOfRotatingDoubleClick(event) {
+    if (isCollectionActive.current === false)
+      return;
+
+    // console.log('___double clicked', mode.current);
+
+    event.stopPropagation();
+
+    if (mode.current === Modes.PRESENTATION) {
+      setIsCollectionSelected(false);
+      modeActions.applyNextToCurrent(Modes.SCROLL);
+    }
+  }
+};

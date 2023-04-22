@@ -1,27 +1,36 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, memo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useSprings, animated } from '@react-spring/three';
 import { Float, Text } from '@react-three/drei';
 
 const AnimatedText = animated(Text);
 
-export default function Description({
-  title, text, 
+export default memo(function Description({
+  title, description, 
   position, visible: isVisible
 }) {
   const ref = useRef();
 
+  const defaultValues = {
+    opacity: 0,
+    positions: [
+      [0 - 2, 0, 0],
+      [0, -2 - 2, 0]
+    ]
+  };
+
   const [springs, springsApi] = useSprings(
     2,
     index => ({ 
-      opacity: 0, 
-      position: [0, 0, 0], 
+      opacity: defaultValues.opacity, 
+      position: defaultValues.positions[index], 
 
       config: { duration: 200 }
     }),
     []
   );
 
+  // animate visibility
   const [visible, setVisible] = useState(isVisible);
 
   useEffect(
@@ -37,12 +46,12 @@ export default function Description({
             onStart: () => setVisible(true)
           }
         :
-        { 
-          opacity: 0,
-          position: index === 0 ? [0 - 2, 0, 0] : [0, -2 - 2, 0],
+          { 
+            opacity: 0,
+            position: defaultValues.positions[index],
 
-          onRest: () => setVisible(false)
-        }
+            onRest: () => setVisible(false)
+          }
       );
     },
     [ isVisible ]
@@ -54,11 +63,7 @@ export default function Description({
     }
   );
 
-  return <group
-      ref={ ref }
-      position={ position }
-      visible={ visible }
-    >
+  return <group ref={ ref } position={ position } visible={ visible }>
       <Float>
         <AnimatedText
           fontSize={ 1 } 
@@ -66,16 +71,16 @@ export default function Description({
           fillOpacity={ springs[0].opacity }
         >
           { title }
-      </AnimatedText>
+        </AnimatedText>
       </Float>
       <Float>
-      <AnimatedText 
-        fontSize={ 0.7 }
-        position={ springs[1].position }
-        fillOpacity={ springs[1].opacity }
-      >
-        { text }
-      </AnimatedText>
+        <AnimatedText 
+          fontSize={ 0.7 }
+          position={ springs[1].position }
+          fillOpacity={ springs[1].opacity }
+        >
+          { description }
+        </AnimatedText>
       </Float>
     </group>
-};
+});

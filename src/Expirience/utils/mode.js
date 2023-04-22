@@ -34,11 +34,13 @@ export const useMode = (mode, onModeChange, deps) => {
     {
       setNext: (mode) => { setNext(mode) },
       resetNext: () => { setNext(null) },
-      applyNextToCurrent: () => {
-        if (next === null)
+      applyNextToCurrent: (value = null) => {
+        const newCurrent = value ?? next;
+
+        if (newCurrent === null)
           return;
     
-        setCurrent(next);
+        setCurrent(newCurrent);
         setNext(null);
       },
       toggleNextByCurrent: (modeA, modeB) => {
