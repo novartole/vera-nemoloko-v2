@@ -22,17 +22,17 @@ export default function useCameraAcrossPoints(camera, points, needsUpdateMatrixW
   );
 
   useFrame(
-    state => {
+    ({ camera }) => {
       pointOnCurve.copy(
         
         curve.getPoint( THREE.MathUtils.clamp(scroll.offset, 0, 1) )
         
       );
-      state.camera.position.copy(pointOnCurve);
-      state.camera.lookAt(0, pointOnCurve.y, 0);
+      camera.position.copy(pointOnCurve);
+      camera.lookAt(0, pointOnCurve.y, 0);
 
       if (needsUpdateMatrixWorld)
-        state.camera.updateMatrixWorld();
+        camera.updateMatrixWorld();
    }
   );
 };

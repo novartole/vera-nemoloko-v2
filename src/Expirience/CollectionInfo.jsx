@@ -5,7 +5,7 @@ import { Float, Text } from '@react-three/drei';
 
 const AnimatedText = animated(Text);
 
-export default memo(function Description({
+export default memo(function CollectionInfo({
   title, description, 
   position, visible: isVisible
 }) {
@@ -58,8 +58,8 @@ export default memo(function Description({
   );
 
   useFrame(
-    (state, delta) => {
-      ref.current.lookAt(state.camera.position);
+    ({ camera }) => {
+      ref.current.lookAt(camera.position);
     }
   );
 

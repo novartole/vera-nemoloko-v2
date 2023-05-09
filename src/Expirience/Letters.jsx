@@ -6,12 +6,14 @@ import { useThree } from '@react-three/fiber';
 import { useSprings, animated } from '@react-spring/three';
 
 import Letter from './Letter.jsx';
-import { state } from '../utils/state.js';
+import useStore from './utils/store.js';
 
 const AnimatedLetter = animated(Letter);
 
 export default function Letters() { 
   console.log('letters');
+
+  const letterSources = useStore(state => state.letterSources);
 
   const { 
     horizontalOffsetFactor: letterHorizontalOffsetFactor,
@@ -27,7 +29,7 @@ export default function Letters() {
   );
 
   const sources = useMemo(
-    () => state.letterSources
+    () => letterSources
       // flat by order
       .map(source =>
         Array.isArray(source.order) 
@@ -42,7 +44,7 @@ export default function Letters() {
       // sort by order
       .sort( (a, b) => a.order - b.order )
 
-    , [ state.letterSources ]
+    , [ letterSources ]
   );
 
   const positions = useMemo(
@@ -129,4 +131,4 @@ export default function Letters() {
   );
 };
 
-state.letterSources.forEach( source => useTexture.preload(source.path) );
+useStore.getState().letterSources.forEach( source => useTexture.preload(source.path) );

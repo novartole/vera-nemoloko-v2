@@ -3,10 +3,12 @@ import { useControls, folder } from 'leva';
 
 import Particles from './Particles.jsx';
 import ScrollableElements from './ScrollableElements.jsx';
-import collections from './collections.js';
+import useStore from './utils/store.js';
 
 export default function Scene() {
   console.log('scene');
+
+  const collections = useStore(state => state.collections);
 
   const { backgroundColor, intensity: ambientLightIntencity } = useControls({ 
     backgroundColor: '#201919', 

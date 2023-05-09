@@ -4,6 +4,13 @@ import { Loader } from '@react-three/drei';
 
 import Scene from './Scene.jsx';
 
+/**
+ * TODO:
+ * - mini-scene in SCROLL mode -> models flowing in PRES mode (as they do now)
+ * - apply material partially: stone + grass
+ */
+
+
 export default function App() {
   console.log('app');
 

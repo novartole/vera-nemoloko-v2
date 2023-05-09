@@ -21,21 +21,21 @@ export default function useCameraParallax(camera, strength = 1, needsUpdateMatri
   );
 
   useFrame(
-    (state, delta) => {
-      state.camera.parent.position.lerp(
-        state.camera.position
+    ({ camera, mouse }, delta) => {
+      camera.parent.position.lerp(
+        camera.position
           .clone()
           .projectOnPlane(OY)
           .applyEuler(toTurnHalfPIAroundOY)
           .normalize()
-          .multiplyScalar(state.mouse.x)
-          .setY( - state.mouse.y )
+          .multiplyScalar(mouse.x)
+          .setY( - mouse.y )
 
         , delta * strength
       );
 
       if (needsUpdateMatrixWorld)
-        state.camera.parent.updateMatrixWorld();
+        camera.parent.updateMatrixWorld();
     }
   );
 };

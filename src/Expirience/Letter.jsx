@@ -42,7 +42,7 @@ export default memo(forwardRef(function Letter(
     {
       positionXY: { value: position.slice(0, 2), step: 0.5 },
       positionZ: { value: position[2] },
-      scale: { value: 1, min: 1, max: 5, step: 0.01 },
+      scale: { value: 0.8, min: 0.1, max: 5, step: 0.01 },
       rotationZ: { value: 0, min: -180, max: 180 }
     },
     [ position ]

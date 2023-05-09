@@ -5,9 +5,10 @@ import { useControls } from 'leva';
 import { useSpring, animated, easings, config } from '@react-spring/three';
 import * as THREE from 'three';
 
+import useStore from './utils/store.js';
 import CollectionInfo from './CollectionInfo.jsx';
-import { Modes, useMode } from '../utils/mode.js';
 import ModelInfo from './ModelInfo.jsx';
+import { Modes, useMode } from './utils/mode.js';
 
 /**
  * TODO: 
@@ -16,12 +17,15 @@ import ModelInfo from './ModelInfo.jsx';
 
 export default function Collection({ 
   index, 
-  content: { elements, title, description }, 
+  content: { id, elements, props }, 
   point 
 }) {
   console.log('collection');
 
   const scroll = useScroll();
+
+  const setActiveCollection = useStore(state => state.setActiveCollection);
+  const resetActiveCollection = useStore(state => state.resetActiveCollection);
 
   const camera = useThree(state => state.camera);
   const { height } = useThree(state => state.viewport);
@@ -74,24 +78,24 @@ export default function Collection({
   } = useControls(
     `Collection #${index}`,
     {
-      distanceToOY: { value: 5, min: 0, max: 25, label: 'dist: col -> OY' },
-      rotationSpeed: { value: 0.05, min: 0, max: 1, label: 'rot: init' },
-      hoveredRotaionSpeed: { value: 5, min: 0, max: 10, label: 'rot: hovered' },
-      hoveredRotationLambda: { value: 3, min: 1, max: 10, label: 'lam: rot', hint: 'how fast target value is gonna be reached' },
-      rotationDelta: { value: 1, min: 0, max: 4, label: 'del: . -> rot', hint: 'distance from center to model toward camera' },
-      vectorToMoveModelsContainerOnScrollSelected: { value: [3, 0, 0], label: 'pos: mod -> selected(SCROLL)' },
-      vectorToMoveModelsContainerOnPresSelected: { value: [-4, 0, 2], label: 'pos: mod -> selected(PRES)' },
-      radiusModelCenter: { value: 2, min: 1, max: 5, label: 'dist: center -> mod' },
-      visibleDelta: { value: height * 1.5, min: 0.5, max: height * 1.5, label: 'del: visible'},
-      activeDelta: { value: height / 4, min: 0.5, max: height / 2, label: 'del: active'},
-      collectionInfoPosition: { value: [- 5.75, 1, 0], label: 'pos: col info' },
-      modelInfoPosition: { value: [4.5, 0, 0], label: 'pos: mod info' },
-      polar: { value: 30, min: 0, max: 360, step: 1, label: 'angle, vert: mod' },
-      azimuth: { value: 30, min: 0, max: 360, step: 1, label: 'angle, horiz: mod' },
-      title,
-      description
+      distanceToOY: { value: props.distanceToOY, min: 0, max: 25, label: 'dist: col -> OY' },
+      rotationSpeed: { value: props.rotationSpeed, min: 0, max: 1, label: 'rot: init' },
+      hoveredRotaionSpeed: { value: props.hoveredRotaionSpeed, min: 0, max: 10, label: 'rot: hovered' },
+      hoveredRotationLambda: { value: props.hoveredRotationLambda, min: 1, max: 10, label: 'lam: rot', hint: 'how fast target value is gonna be reached' },
+      rotationDelta: { value: props.rotationDelta, min: 0, max: 4, label: 'del: . -> rot', hint: 'distance from center to model toward camera' },
+      vectorToMoveModelsContainerOnScrollSelected: { value: props.vectorToMoveModelsContainerOnScrollSelected, label: 'pos: mod -> selected(SCROLL)' },
+      vectorToMoveModelsContainerOnPresSelected: { value: props.vectorToMoveModelsContainerOnPresSelected, label: 'pos: mod -> selected(PRES)' },
+      radiusModelCenter: { value: props.radiusModelCenter, min: 1, max: 5, label: 'dist: center -> mod' },
+      visibleDelta: { value: props.visibleDelta(height), min: 0.5, max: height * 1.5, label: 'del: visible'},
+      activeDelta: { value: props.activeDelta(height), min: 0.5, max: height / 2, label: 'del: active'},
+      collectionInfoPosition: { value: props.collectionInfoPosition, label: 'pos: col info' },
+      modelInfoPosition: { value: props.modelInfoPosition, label: 'pos: mod info' },
+      polar: { value: props.polar, min: 0, max: 360, step: 1, label: 'angle, vert: mod' },
+      azimuth: { value: props.azimuth, min:  0, max: 360, step: 1, label: 'angle, horiz: mod' },
+      title: props.title,
+      description: props.description
     },
-    [title, description, height]
+    [height, props]
   );
 
   const collectionPosition = [distanceCollectionOY * point.x, point.y, distanceCollectionOY * point.z];
@@ -189,7 +193,7 @@ export default function Collection({
         );
       }
     }, 
-    [ isCollectionSelected ]
+    [ isCollectionSelected, vectorToMoveModelsContainerOnScrollSelected, vectorToMoveModelsContainerOnPresSelected ]
   ); 
 
   useEffect( 
@@ -210,7 +214,7 @@ export default function Collection({
   );
 
   useFrame(
-    (state, delta) => {
+    ({ camera }, delta) => {
       modelContainerOfMoving.current.rotation.y += calculateModelContainerRotation(delta) * delta;
 
       modelsRef.current.forEach(model => {
@@ -219,7 +223,7 @@ export default function Collection({
         model.rotation.z += collectionRotationSpeed * delta;
       });
 
-      const isCollectionInActiveRange = Math.abs(state.camera.position.y - collectionPosition[1]) < activeDelta;
+      const isCollectionInActiveRange = Math.abs(camera.position.y - collectionPosition[1]) < activeDelta;
       if (isCollectionInActiveRange) {
 
         if (isCollectionActive.current === false)
@@ -232,7 +236,7 @@ export default function Collection({
 
       }
 
-      const isCollectionInVisibleRange = Math.abs(state.camera.position.y - collectionPosition[1]) < visibleDelta;
+      const isCollectionInVisibleRange = Math.abs(camera.position.y - collectionPosition[1]) < visibleDelta;
       if (isCollectionInVisibleRange) {
 
         if (isCollectionVisible === false) 
@@ -301,7 +305,7 @@ export default function Collection({
                     polar={ [- THREE.MathUtils.degToRad(polar), THREE.MathUtils.degToRad(polar)] }
                     azimuth={ [- THREE.MathUtils.degToRad(azimuth), THREE.MathUtils.degToRad(azimuth)] }
                     config={{ mass: 2, tension: 400 }}
-                    snap={{ mass: 4, tension: 400 }}
+                    //snap={{ mass: 4, tension: 400 }}
                   >
                     <Suspense>
                       <element.model ref={ modelRef => modelsRef.current[index] = modelRef } opacity={ spring.opacity } />
@@ -320,12 +324,13 @@ export default function Collection({
     isCollectionActive.current = value;
 
     if (isCollectionActive.current) {
-
       springApi.start({ opacity: 1 });
-
+      setActiveCollection(id);
+      // setIsCollectionSelected(true);
     } else {
       springApi.start({ opacity: defaultValues.opacity });
       setIsCollectionSelected(false);
+      resetActiveCollection();
     }
   }
 
